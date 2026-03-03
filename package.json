@@ -1,0 +1,28 @@
+{
+  "name": "skippster",
+  "version": "0.1.0",
+  "description": "Decentralized platform with YouTube-like video and Facebook-like social apps",
+  "private": true,
+  "workspaces": [
+    "core/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=apps/tube\" \"npm run dev --workspace=apps/social\" \"npm run dev --workspace=core/pds\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
