@@ -24,7 +24,7 @@ export class DatabaseConnection {
       : config.path || join(process.cwd(), 'skippster.db');
 
     this.db = new Database(dbPath, {
-      readonly: config.readonly,
+      readonly: config.readonly || false,
     });
 
     // Enable WAL mode for better concurrency
@@ -113,11 +113,8 @@ export class DatabaseConnection {
   /**
    * Backup database
    */
-  backup(backupPath: string): void {
-    const backup = new Database(backupPath);
-    this.db.backup(backup).then(() => {
-      backup.close();
-    });
+  backup(backupPath: string): Promise<any> {
+    return this.db.backup(backupPath);
   }
 
   /**

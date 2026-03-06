@@ -16,7 +16,7 @@ import {
   SubscriptionRepository,
 } from '../models';
 import { authMiddleware } from './middleware';
-import { ipfsClient } from '../ipfs/client';
+// IPFS disabled: import { ipfsClient } from '../ipfs/client';
 
 export interface ServerConfig {
   port?: number;
@@ -124,7 +124,7 @@ export class PDSServer {
       }
     });
 
-    this.patch('/api/videos/:id', authMiddleware, (req, res) => {
+    this.app.patch('/api/videos/:id', authMiddleware, (req, res) => {
       try {
         const video = videoRepo.update(req.params.id, req.body);
         if (!video) {
@@ -156,7 +156,7 @@ export class PDSServer {
       let posts;
       if (feed && typeof feed === 'string') {
         posts = postRepo.findFeed(feed, Number(limit), Number(offset));
-      } else if (public === 'true') {
+      } else if (isPublic === 'true') {
         posts = postRepo.findPublic(Number(limit), Number(offset));
       } else if (did && typeof did === 'string') {
         posts = postRepo.findByDID(did, Number(limit), Number(offset));

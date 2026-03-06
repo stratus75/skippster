@@ -1,5 +1,5 @@
 import React from 'react';
-import { VideoCard } from './VideoCard';
+import { VideoCard } from '../components/shared/VideoCard';
 
 export function TrendingPage() {
   // Mock trending videos

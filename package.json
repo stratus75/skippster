@@ -4,8 +4,8 @@
   "description": "Decentralized platform with YouTube-like video and Facebook-like social apps",
   "private": true,
   "workspaces": [
-    "core/*",
-    "apps/*"
+    "apps/*",
+    "core/*"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=apps/tube\" \"npm run dev --workspace=apps/social\" \"npm run dev --workspace=core/pds\"",

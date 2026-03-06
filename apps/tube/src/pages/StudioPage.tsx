@@ -247,6 +247,3 @@ function StatCard({
     </div>
   );
 }
-
-import { Video } from 'lucide-react';
-import { BarChart3, Upload } from 'lucide-react';

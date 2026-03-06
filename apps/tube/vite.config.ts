@@ -7,14 +7,31 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@skippster/identity': path.resolve(__dirname, '../../core/identity/src'),
-      '@skippster/pds': path.resolve(__dirname, '../../core/pds/src'),
-      '@skippster/p2p': path.resolve(__dirname, '../../core/p2p/src'),
-      '@skippster/payments': path.resolve(__dirname, '../../core/payments/src'),
-      '@skippster/agent': path.resolve(__dirname, '../../core/agent/src'),
     },
   },
   server: {
     port: 3000,
+  },
+  define: {
+    // Required for webtorrent
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['webtorrent'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
+  },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      // Don't externalize Node.js modules, let them be bundled
+      external: [],
+    },
   },
 });

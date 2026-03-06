@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { VideoCard } from './VideoCard';
+import { VideoCard } from '../components/shared/VideoCard';
 
 export function ChannelPage() {
   const { did } = useParams<{ did: string }>();

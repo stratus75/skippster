@@ -68,6 +68,7 @@ export class VideoRepository {
 
     return {
       ...dto,
+      tags: dto.tags || null,
       description: dto.description || null,
       thumbnailCid: dto.thumbnailCid || null,
       views: 0,
@@ -83,6 +84,15 @@ export class VideoRepository {
     const stmt = this.db.getDb().prepare('SELECT * FROM videos WHERE id = ?');
     const row = stmt.get(id) as any;
     return row ? this.rowToVideo(row) : null;
+  }
+
+  
+  findAll(limit = 50, offset = 0): Video[] {
+    const stmt = this.db
+      .getDb()
+      .prepare('SELECT * FROM videos ORDER BY created_at DESC LIMIT ? OFFSET ?');
+    const rows = stmt.all(limit, offset) as any[];
+    return rows.map((row) => this.rowToVideo(row));
   }
 
   findByDID(did: string, limit = 50, offset = 0): Video[] {

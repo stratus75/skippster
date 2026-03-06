@@ -3,28 +3,34 @@
  * Local data storage with HTTP API
  */
 
+// Database
 export { DatabaseConnection } from './database/connection';
 export type { DatabaseConfig } from './database/connection';
 export { SCHEMA, SCHEMA_VERSION } from './database/schema';
 
-// Models
-export { UserRepository } from './models/user';
-export type { User, CreateUserDto } from './models/user';
+// Models - export through barrel file
+export {
+  UserRepository,
+  VideoRepository,
+  PostRepository,
+  CommentRepository,
+  ReactionRepository,
+  SubscriptionRepository,
+} from './models';
 
-export { VideoRepository } from './models/video';
-export type { Video, CreateVideoDto } from './models/video';
-
-export { PostRepository } from './models/post';
-export type { Post, CreatePostDto } from './models/post';
-
-export { CommentRepository } from './models/comment';
-export type { Comment, CreateCommentDto } from './models/comment';
-
-export { ReactionRepository } from './models/reaction';
-export type { Reaction, CreateReactionDto } from './models/reaction';
-
-export { SubscriptionRepository } from './models/subscription';
-export type { Subscription } from './models/subscription';
+export type {
+  User,
+  CreateUserDto,
+  Video,
+  CreateVideoDto,
+  Post,
+  CreatePostDto,
+  Comment,
+  CreateCommentDto,
+  Reaction,
+  CreateReactionDto,
+  Subscription,
+} from './models';
 
 // API
 export { PDSServer } from './api/server';
@@ -35,8 +41,11 @@ export { authMiddleware, rateLimitMiddleware, loggerMiddleware } from './api/mid
 export { ipfsClient, getIPFSClient } from './ipfs/client';
 
 // Main entry point
+import { DatabaseConnection } from './database/connection';
+import { PDSServer } from './api/server';
+
 export function startPDS(config?: { port?: number; dbPath?: string }): Promise<void> {
   const db = DatabaseConnection.createInstance({ path: config?.dbPath });
-  const server = new PDSServer(db, { port: config?.port });
+  const server = new PDSServer(db, { port: config?.port || 4000 });
   return server.start();
 }
