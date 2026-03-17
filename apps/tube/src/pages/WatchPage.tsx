@@ -43,7 +43,7 @@ export function WatchPage() {
   }
 
   const handlePlayerReady = (info: TorrentInfo) => {
-    console.log('Torrent ready:', info);
+    // Player ready with torrent info
     updatePlayerState({ isReady: true });
   };
 
