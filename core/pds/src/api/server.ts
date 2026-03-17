@@ -18,6 +18,7 @@ import {
   NotificationRepository,
 } from '../models';
 import { authMiddleware, setUserRepository } from './middleware';
+import { validate, createUserSchema, createVideoSchema, updateVideoSchema, createPostSchema, createCommentSchema, createReactionSchema, createSubscriptionSchema, friendRequestSchema, friendActionSchema, createNotificationSchema } from './validation';
 // IPFS disabled: import { ipfsClient } from '../ipfs/client';
 
 export interface ServerConfig {
@@ -71,9 +72,6 @@ export class PDSServer {
     // Configure authentication middleware with user repository
     setUserRepository(userRepo);
 
-    // Configure authentication middleware with user repository
-    setUserRepository(userRepo);
-
     // Health check
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -89,8 +87,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/users', authMiddleware, (req, res) => {
+      const validation = validate(createUserSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const user = userRepo.create(req.body);
+        const user = userRepo.create(validation.data);
         res.status(201).json(user);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -126,8 +128,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/videos', authMiddleware, async (req, res) => {
+      const validation = validate(createVideoSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const video = videoRepo.create(req.body);
+        const video = videoRepo.create(validation.data);
         res.status(201).json(video);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -135,8 +141,12 @@ export class PDSServer {
     });
 
     this.app.patch('/api/videos/:id', authMiddleware, (req, res) => {
+      const validation = validate(updateVideoSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const video = videoRepo.update(req.params.id, req.body);
+        const video = videoRepo.update(req.params.id, validation.data);
         if (!video) {
           return res.status(404).json({ error: 'Video not found' });
         }
@@ -178,8 +188,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/posts', authMiddleware, (req, res) => {
+      const validation = validate(createPostSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const post = postRepo.create(req.body);
+        const post = postRepo.create(validation.data);
         res.status(201).json(post);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -213,8 +227,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/comments', authMiddleware, (req, res) => {
+      const validation = validate(createCommentSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const comment = commentRepo.create(req.body);
+        const comment = commentRepo.create(validation.data);
         res.status(201).json(comment);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -240,8 +258,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/reactions', authMiddleware, (req, res) => {
+      const validation = validate(createReactionSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const reaction = reactionRepo.create(req.body);
+        const reaction = reactionRepo.create(validation.data);
         res.status(201).json(reaction);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -271,8 +293,12 @@ export class PDSServer {
     });
 
     this.app.post('/api/subscriptions', authMiddleware, (req, res) => {
+      const validation = validate(createSubscriptionSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const { subscriberDID, creatorDID } = req.body;
+        const { subscriberDID, creatorDID } = validation.data;
         const subscription = subscriptionRepo.create(subscriberDID, creatorDID);
         res.status(201).json(subscription);
       } catch (error: any) {
@@ -329,11 +355,12 @@ export class PDSServer {
 
     // Send friend request
     this.app.post('/api/friends/request', authMiddleware, (req, res) => {
+      const validation = validate(friendRequestSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const { fromDid, toDid } = req.body;
-        if (!fromDid || !toDid) {
-          return res.status(400).json({ error: 'Missing fromDid or toDid' });
-        }
+        const { fromDid, toDid } = validation.data;
 
         // Check if relationship already exists
         const existing = friendRepo.findRelationship(fromDid, toDid);
@@ -357,11 +384,12 @@ export class PDSServer {
 
     // Accept friend request
     this.app.post('/api/friends/accept', authMiddleware, (req, res) => {
+      const validation = validate(friendActionSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const { fromDid, toDid } = req.body;
-        if (!fromDid || !toDid) {
-          return res.status(400).json({ error: 'Missing fromDid or toDid' });
-        }
+        const { fromDid, toDid } = validation.data;
 
         const friend = friendRepo.accept(fromDid, toDid);
         if (!friend) {
@@ -437,8 +465,12 @@ export class PDSServer {
 
     // Create notification (for testing or system notifications)
     this.app.post('/api/notifications', authMiddleware, (req, res) => {
+      const validation = validate(createNotificationSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error });
+      }
       try {
-        const notification = notificationRepo.create(req.body);
+        const notification = notificationRepo.create(validation.data);
         res.status(201).json(notification);
       } catch (error: any) {
         res.status(400).json({ error: error.message });
