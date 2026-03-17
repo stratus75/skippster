@@ -1,24 +1,25 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Eye, ThumbsUp } from 'lucide-react';
+import { Clock, Eye, Share2 } from 'lucide-react';
+import type { Video, MonetizationType } from '../../types/video';
 
-export interface Video {
-  id: string;
-  did: string;
+/**
+ * Video with creator info for display in cards
+ * Extends the base Video type with the creator's handle for display
+ */
+export interface VideoWithCreator extends Video {
   handle: string;
-  title: string;
   thumbnail?: string;
-  duration: number;
-  views: number;
-  createdAt: string;
-  monetizationType: 'free' | 'donations' | 'payperview' | 'subscription';
 }
 
 interface VideoCardProps {
-  video: Video;
+  video: VideoWithCreator;
+  onShareToSocial?: (video: VideoWithCreator) => void;
 }
 
-export function VideoCard({ video }: VideoCardProps) {
+export function VideoCard({ video, onShareToSocial }: VideoCardProps) {
+  const [showShareTooltip, setShowShareTooltip] = React.useState(false);
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -45,6 +46,12 @@ export function VideoCard({ video }: VideoCardProps) {
     return new Date(date).toLocaleDateString();
   };
 
+  const handleShare = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onShareToSocial?.(video);
+  };
+
   const thumbnailStyle = video.thumbnail
     ? { backgroundImage: `url(${video.thumbnail})` }
     : { background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)' };
@@ -69,6 +76,23 @@ export function VideoCard({ video }: VideoCardProps) {
           <span className="absolute top-2 right-2 bg-tube-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
             {video.monetizationType === 'donations' ? '💖' : '🔒'}
           </span>
+        )}
+
+        {/* Share to Social button - appears on hover */}
+        {onShareToSocial && (
+          <div
+            className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            onMouseEnter={() => setShowShareTooltip(true)}
+            onMouseLeave={() => setShowShareTooltip(false)}
+          >
+            <button
+              onClick={handleShare}
+              className="bg-[#1877F2] hover:bg-[#166FE5] text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Share to Social
+            </button>
+          </div>
         )}
       </div>
       <div className="flex gap-3">
