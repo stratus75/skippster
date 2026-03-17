@@ -14,8 +14,10 @@ import {
   CommentRepository,
   ReactionRepository,
   SubscriptionRepository,
+  FriendRepository,
+  NotificationRepository,
 } from '../models';
-import { authMiddleware } from './middleware';
+import { authMiddleware, setUserRepository } from './middleware';
 // IPFS disabled: import { ipfsClient } from '../ipfs/client';
 
 export interface ServerConfig {
@@ -63,6 +65,14 @@ export class PDSServer {
     const commentRepo = new CommentRepository(this.db);
     const reactionRepo = new ReactionRepository(this.db);
     const subscriptionRepo = new SubscriptionRepository(this.db);
+    const friendRepo = new FriendRepository(this.db);
+    const notificationRepo = new NotificationRepository(this.db);
+
+    // Configure authentication middleware with user repository
+    setUserRepository(userRepo);
+
+    // Configure authentication middleware with user repository
+    setUserRepository(userRepo);
 
     // Health check
     this.app.get('/health', (req, res) => {
@@ -151,7 +161,7 @@ export class PDSServer {
     });
 
     this.app.get('/api/posts', (req, res) => {
-      const { did, feed, public, limit = '20', offset = '0' } = req.query;
+      const { did, feed, public: isPublic, limit = '20', offset = '0' } = req.query;
 
       let posts;
       if (feed && typeof feed === 'string') {
@@ -279,26 +289,181 @@ export class PDSServer {
       res.status(204).send();
     });
 
-    // IPFS upload
-    this.app.post('/api/ipfs/upload', authMiddleware, async (req, res) => {
+    // Friends
+    // Get friends list for a user
+    this.app.get('/api/friends/:did', (req, res) => {
+      const friends = friendRepo.findFriends(req.params.did);
+      res.json({ friends, count: friends.length });
+    });
+
+    // Get pending friend requests (received)
+    this.app.get('/api/friends/requests/:did', (req, res) => {
+      const requests = friendRepo.findPendingRequests(req.params.did);
+      res.json({ requests, count: requests.length });
+    });
+
+    // Get sent friend requests
+    this.app.get('/api/friends/sent/:did', (req, res) => {
+      const requests = friendRepo.findSentRequests(req.params.did);
+      res.json({ requests, count: requests.length });
+    });
+
+    // Get friend count
+    this.app.get('/api/friends/count/:did', (req, res) => {
+      const count = friendRepo.getFriendCount(req.params.did);
+      const pendingCount = friendRepo.getPendingRequestCount(req.params.did);
+      res.json({ friends: count, pendingRequests: pendingCount });
+    });
+
+    // Check friendship status
+    this.app.get('/api/friends/status', (req, res) => {
+      const { did1, did2 } = req.query;
+      if (!did1 || !did2) {
+        return res.status(400).json({ error: 'Missing required parameters' });
+      }
+      const isFriend = friendRepo.isFriend(did1 as string, did2 as string);
+      const hasPending = friendRepo.hasPendingRequest(did1 as string, did2 as string);
+      const relationship = friendRepo.findRelationship(did1 as string, did2 as string);
+      res.json({ isFriend, hasPendingRequest: hasPending, relationship });
+    });
+
+    // Send friend request
+    this.app.post('/api/friends/request', authMiddleware, (req, res) => {
       try {
-        const { data } = req.body;
-        const cid = await ipfsClient.add(data);
-        res.json({ cid: cid.toString() });
+        const { fromDid, toDid } = req.body;
+        if (!fromDid || !toDid) {
+          return res.status(400).json({ error: 'Missing fromDid or toDid' });
+        }
+
+        // Check if relationship already exists
+        const existing = friendRepo.findRelationship(fromDid, toDid);
+        if (existing) {
+          return res.status(400).json({ error: 'Friend relationship already exists' });
+        }
+
+        const friend = friendRepo.create(fromDid, toDid);
+
+        // Create notification for the recipient
+        const fromUser = userRepo.findByDID(fromDid);
+        if (fromUser) {
+          notificationRepo.createFriendRequestNotification(fromDid, toDid, fromUser.handle);
+        }
+
+        res.status(201).json(friend);
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        res.status(400).json({ error: error.message });
       }
     });
 
-    // IPFS retrieve
-    this.app.get('/api/ipfs/:cid', async (req, res) => {
+    // Accept friend request
+    this.app.post('/api/friends/accept', authMiddleware, (req, res) => {
       try {
-        const data = await ipfsClient.cat(req.params.cid);
-        res.send(data);
+        const { fromDid, toDid } = req.body;
+        if (!fromDid || !toDid) {
+          return res.status(400).json({ error: 'Missing fromDid or toDid' });
+        }
+
+        const friend = friendRepo.accept(fromDid, toDid);
+        if (!friend) {
+          return res.status(404).json({ error: 'Friend request not found' });
+        }
+
+        // Create notification for the requester
+        const toUser = userRepo.findByDID(toDid);
+        if (toUser) {
+          notificationRepo.createFriendAcceptedNotification(toDid, fromDid, toUser.handle);
+        }
+
+        res.json(friend);
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        res.status(400).json({ error: error.message });
       }
     });
+
+    // Delete friend / decline request
+    this.app.delete('/api/friends', authMiddleware, (req, res) => {
+      const { did1, did2 } = req.query;
+      if (!did1 || !did2) {
+        return res.status(400).json({ error: 'Missing required parameters' });
+      }
+      const deleted = friendRepo.delete(did1 as string, did2 as string);
+      res.json({ deleted });
+    });
+
+    // Notifications
+    // Get notifications for a user
+    this.app.get('/api/notifications/:did', (req, res) => {
+      const { limit = '50', offset = '0' } = req.query;
+      const notifications = notificationRepo.findByDid(req.params.did, Number(limit), Number(offset));
+      const unreadCount = notificationRepo.getUnreadCount(req.params.did);
+      res.json({ notifications, unreadCount });
+    });
+
+    // Get unread notifications
+    this.app.get('/api/notifications/unread/:did', (req, res) => {
+      const notifications = notificationRepo.findUnread(req.params.did);
+      res.json({ notifications, count: notifications.length });
+    });
+
+    // Get unread count
+    this.app.get('/api/notifications/count/:did', (req, res) => {
+      const count = notificationRepo.getUnreadCount(req.params.did);
+      res.json({ unreadCount: count });
+    });
+
+    // Mark notification as read
+    this.app.patch('/api/notifications/:id/read', (req, res) => {
+      const success = notificationRepo.markAsRead(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: 'Notification not found' });
+      }
+      res.json({ success: true });
+    });
+
+    // Mark all notifications as read
+    this.app.patch('/api/notifications/read-all/:did', (req, res) => {
+      const count = notificationRepo.markAllAsRead(req.params.did);
+      res.json({ markedAsRead: count });
+    });
+
+    // Delete notification
+    this.app.delete('/api/notifications/:id', (req, res) => {
+      const deleted = notificationRepo.delete(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Notification not found' });
+      }
+      res.json({ deleted: true });
+    });
+
+    // Create notification (for testing or system notifications)
+    this.app.post('/api/notifications', authMiddleware, (req, res) => {
+      try {
+        const notification = notificationRepo.create(req.body);
+        res.status(201).json(notification);
+      } catch (error: any) {
+        res.status(400).json({ error: error.message });
+      }
+    });
+
+    // IPFS endpoints disabled - uncomment when IPFS is configured
+    // this.app.post('/api/ipfs/upload', authMiddleware, async (req, res) => {
+    //   try {
+    //     const { data } = req.body;
+    //     const cid = await ipfsClient.add(data);
+    //     res.json({ cid: cid.toString() });
+    //   } catch (error: any) {
+    //     res.status(500).json({ error: error.message });
+    //   }
+    // });
+
+    // this.app.get('/api/ipfs/:cid', async (req, res) => {
+    //   try {
+    //     const data = await ipfsClient.cat(req.params.cid);
+    //     res.send(data);
+    //   } catch (error: any) {
+    //     res.status(500).json({ error: error.message });
+    //   }
+    // });
   }
 
   private setupErrorHandling(): void {
