@@ -35,6 +35,10 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
+*.db-shm
+*.db-wal
 
 # IPFS
 .ipfs/
@@ -52,6 +56,22 @@ coverage/
 tmp/
 temp/
 *.tmp
+*.backup
+
+# User uploads
+uploads/
+
+# Test media files
+test-*.mp4
+test-*.mjs
+
+# User uploads
+uploads/
+
+# Test files
+test-*.mjs
+test-*.mp4
+*.backup
 
 # Worktrees
 .claude/worktrees/
