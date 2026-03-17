@@ -7,11 +7,12 @@ interface VideoEmbedProps {
   thumbnail?: string;
 }
 
-export function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProps) {
-  const [isLoaded, setIsLoaded] = React.useState(false);
+// Get Tube app URL from environment or default
+const TUBE_URL = import.meta.env.VITE_TUBE_URL || 'http://localhost:3006';
 
+export function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProps) {
   // Link to the Tube app video player
-  const tubeUrl = `http://localhost:3006/video/${videoId}`;
+  const tubeUrl = `${TUBE_URL}/video/${videoId}`;
 
   return (
     <div className="my-2">

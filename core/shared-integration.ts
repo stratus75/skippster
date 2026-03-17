@@ -250,10 +250,11 @@ export class CrossAppManager {
  */
 class TubeAPIClient {
   private identity: IdentityManager;
-  private baseUrl = 'http://localhost:4000';
+  private baseUrl: string;
 
   constructor(identity: IdentityManager) {
     this.identity = identity;
+    this.baseUrl = process.env.PDS_URL || 'http://localhost:4000';
   }
 
   async getVideo(videoId: string): Promise<VideoMetadata> {
@@ -287,10 +288,11 @@ class TubeAPIClient {
  */
 class SocialAPIClient {
   private identity: IdentityManager;
-  private baseUrl = 'http://localhost:4000';
+  private baseUrl: string;
 
   constructor(identity: IdentityManager) {
     this.identity = identity;
+    this.baseUrl = process.env.PDS_URL || 'http://localhost:4000';
   }
 
   async createPost(data: {
