@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Post, CreatePostDto } from '../types';
 import { postApi, reactionApi } from '../api';
+import { toast } from './toastStore';
 
 interface FeedState {
   posts: Post[];
@@ -14,8 +15,8 @@ interface FeedActions {
   fetchFeed: (did: string, reset?: boolean) => Promise<void>;
   fetchPublic: (reset?: boolean) => Promise<void>;
   createPost: (data: CreatePostDto) => Promise<Post>;
-  likePost: (postId: string, did: string) => Promise<void>;
-  unlikePost: (postId: string, did: string) => Promise<void>;
+  likePost: (postId: string, did: string) => Promise<boolean>;
+  unlikePost: (postId: string, did: string) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -47,6 +48,7 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch feed';
       set({ error: message, isLoading: false });
+      toast.error(message);
     }
   },
 
@@ -67,15 +69,23 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch posts';
       set({ error: message, isLoading: false });
+      toast.error(message);
     }
   },
 
   createPost: async (data: CreatePostDto) => {
-    const post = await postApi.create(data);
-    set((state) => ({
-      posts: [post, ...state.posts],
-    }));
-    return post;
+    try {
+      const post = await postApi.create(data);
+      set((state) => ({
+        posts: [post, ...state.posts],
+      }));
+      toast.success('Post created successfully');
+      return post;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create post';
+      toast.error(message);
+      throw err;
+    }
   },
 
   likePost: async (postId: string, did: string) => {
@@ -87,16 +97,22 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
         targetId: postId,
         emoji: '👍',
       });
-    } catch {
-      // Silently fail - reaction may already exist
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to like post';
+      toast.error(message);
+      return false;
     }
   },
 
   unlikePost: async (postId: string, did: string) => {
     try {
       await reactionApi.delete(did, 'post', postId);
-    } catch {
-      // Silently fail
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to unlike post';
+      toast.error(message);
+      return false;
     }
   },
 
