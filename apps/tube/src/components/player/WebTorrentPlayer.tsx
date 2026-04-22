@@ -1,5 +1,6 @@
 /**
  * WebTorrentPlayer - React component for P2P video streaming
+ * Enhanced with DHT tracker support and decentralized peer discovery
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -42,6 +43,7 @@ interface WebTorrentPlayerProps {
   muted?: boolean;
   poster?: string;
   fileIndex?: number;
+  trackerUrl?: string; // Custom DHT tracker URL
   onReady?: (info: TorrentInfo) => void;
   onError?: (error: Error) => void;
   onProgress?: (progress: PlayerProgress) => void;
@@ -52,17 +54,42 @@ interface WebTorrentPlayerProps {
 // Singleton client instance
 let clientInstance: WebTorrent.Instance | null = null;
 
+// Default tracker URL (can be configured)
+let defaultTrackerUrl = 'http://localhost:4001';
+
+export function setDefaultTrackerUrl(url: string): void {
+  defaultTrackerUrl = url;
+  console.log('[WebTorrentPlayer] Default tracker URL set to:', url);
+}
+
+export function getDefaultTrackerUrl(): string {
+  return defaultTrackerUrl;
+}
+
 function getTorrentClient(): WebTorrent.Instance {
   if (!clientInstance) {
     clientInstance = new WebTorrent({
       tracker: {
         announce: [
+          defaultTrackerUrl + '/announce',
           'wss://tracker.openwebtorrent.com',
           'wss://tracker.btorrent.xyz',
           'wss://tracker.fastcast.nz',
         ],
+        dht: {
+          // DHT tracker nodes for decentralized peer discovery
+          nodes: [
+            'router.bittorrent.com:6881',
+            'router.utorrent.com:6881',
+            'dht.transmissionbt.com:6881',
+          ],
+        },
       },
+      lsd: true, // Enable Local Service Discovery for LAN peers
+      utpex: true, // Enable UPnP port forwarding
     });
+
+    console.log('[WebTorrentPlayer] Torrent client initialized with DHT support');
   }
   return clientInstance;
 }
@@ -76,6 +103,7 @@ export const WebTorrentPlayer: React.FC<WebTorrentPlayerProps> = ({
   muted = false,
   poster,
   fileIndex = 0,
+  trackerUrl,
   onReady,
   onError,
   onProgress,
@@ -84,6 +112,14 @@ export const WebTorrentPlayer: React.FC<WebTorrentPlayerProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<Error | null>(null);
+  const activeTrackerUrl = useRef<string>(trackerUrl || defaultTrackerUrl);
+
+  // Update tracker URL if prop changes
+  useEffect(() => {
+    if (trackerUrl) {
+      activeTrackerUrl.current = trackerUrl;
+    }
+  }, [trackerUrl]);
 
   useEffect(() => {
     const uri = magnetURI || (infoHash ? `magnet:?xt=urn:btih:${infoHash}` : null);
@@ -98,7 +134,19 @@ export const WebTorrentPlayer: React.FC<WebTorrentPlayerProps> = ({
 
     const startStreaming = async () => {
       try {
-        client.add(uri, (torrent) => {
+        // Add torrent with custom tracker URL
+        const torrentOptions: WebTorrent.TorrentOptions = {
+          tracker: {
+            announce: [
+              activeTrackerUrl.current + '/announce',
+              'wss://tracker.openwebtorrent.com',
+              'wss://tracker.btorrent.xyz',
+              'wss://tracker.fastcast.nz',
+            ],
+          },
+        };
+
+        client.add(uri, torrentOptions, (torrent) => {
           currentTorrent = torrent;
           const file = torrent.files[fileIndex];
 
