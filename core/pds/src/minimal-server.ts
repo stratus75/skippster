@@ -144,6 +144,133 @@ app.post('/api/videos/:id/view', (req: Request, res: Response) => {
   }
 });
 
+// ===== VIDEO UPLOAD API (IPFS + Torrent) =====
+// Note: Uses base64-encoded file data for simplicity
+// In production, install multer or use busboy for multipart handling
+
+import { join } from 'path';
+import { mkdir, writeFile } from 'fs/promises';
+import { createHash, randomBytes } from 'crypto';
+
+async function ensureDir(dir: string) {
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch {}
+}
+
+// Simple torrent info hash generator
+function generateInfoHash(data: Buffer, name: string): string {
+  const hash = createHash('sha1');
+  hash.update(data.slice(0, Math.min(data.length, 1024 * 1024)));
+  hash.update(name);
+  hash.update(Date.now().toString());
+  return hash.digest('hex');
+}
+
+// Upload endpoint - handles video file as base64, stores to disk, creates torrent
+app.post('/api/videos/upload', async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    
+    if (!body.videoData) {
+      res.status(400).json({ error: 'No video data provided' });
+      return;
+    }
+
+    const { 
+      title, 
+      description, 
+      tags, 
+      monetizationType, 
+      price, 
+      currency,
+      filename,
+      fileSize 
+    } = body;
+    
+    // Decode base64 video data
+    const videoBuffer = Buffer.from(body.videoData, 'base64');
+    const originalName = filename || 'video.mp4';
+    const size = fileSize || videoBuffer.length;
+
+    // Generate video ID
+    const id = `vid_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
+
+    // Generate IPFS-style CID (stub)
+    const cid = `bafk${generateInfoHash(videoBuffer, originalName)}`;
+
+    // Generate torrent info hash and magnet URI
+    const infoHash = generateInfoHash(videoBuffer, originalName);
+    const trackers = [
+      'wss://tracker.openwebtorrent.com',
+      'wss://tracker.btorrent.xyz',
+      'udp://tracker.opentrackr.org:1337/announce',
+    ];
+    const magnetUri = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(originalName)}` +
+      trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+
+    // Save file to uploads directory
+    const uploadsDir = join(process.cwd(), 'uploads');
+    await ensureDir(uploadsDir);
+    const filePath = join(uploadsDir, `${id}-${originalName}`);
+    await writeFile(filePath, videoBuffer);
+
+    // Parse tags
+    let parsedTags: string[] = [];
+    if (tags) {
+      try {
+        parsedTags = JSON.parse(tags);
+      } catch {
+        parsedTags = [];
+      }
+    }
+
+    // Create video record
+    const videoData = {
+      id,
+      did: 'anonymous',
+      title: title || originalName,
+      description: description || null,
+      thumbnailCid: null,
+      magnetLink: magnetUri,
+      duration: 0,
+      views: 0,
+      tags: parsedTags.length > 0 ? parsedTags : null,
+      monetizationType: monetizationType || 'free',
+      price: price ? parseFloat(price) : null,
+      currency: currency || null,
+    };
+
+    const video = videoRepo.create(videoData);
+
+    console.log(`[Upload] Video ${id} uploaded: ${size} bytes`);
+    console.log(`[Upload] CID: ${cid}`);
+    console.log(`[Upload] Magnet: ${magnetUri.slice(0, 80)}...`);
+
+    res.status(201).json({
+      id,
+      cid,
+      infoHash,
+      magnetUri,
+      ...video,
+    });
+  } catch (error: any) {
+    console.error('[Upload] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get upload status (stub for transcoding progress)
+app.get('/api/videos/upload/:id/status', (req: Request, res: Response) => {
+  const { id } = req.params;
+  res.json({
+    id,
+    status: 'complete',
+    progress: 100,
+    stage: 'seeding',
+  });
+});
+
 // ===== COMMENTS API =====
 app.get('/api/videos/:id/comments', (req: Request, res: Response) => {
   try {

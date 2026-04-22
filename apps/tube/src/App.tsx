@@ -7,6 +7,7 @@ import { StudioPage } from './pages/StudioPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
 import { TrendingPage } from './pages/TrendingPage';
 import { ChannelPage } from './pages/ChannelPage';
+import { UploadPage } from './pages/UploadPage';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/watch/:videoId" element={<WatchPage />} />
         <Route path="/studio" element={<StudioPage />} />
+        <Route path="/upload" element={<UploadPage />} />
         <Route path="/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/trending" element={<TrendingPage />} />
         <Route path="/channel/:did" element={<ChannelPage />} />

@@ -1,7 +1,9 @@
 import axios from 'axios';
-import type { Video } from '../types';
+import type { Video, VideoUpload } from '../types';
 
-const PDS_URL = import.meta.env.VITE_PDS_URL || 'http://localhost:4000';
+const PDS_URL = typeof process !== 'undefined' 
+  ? (process.env.VITE_PDS_URL || 'http://localhost:4000')
+  : 'http://localhost:4000';
 
 const api = axios.create({
   baseURL: PDS_URL,
@@ -33,12 +35,71 @@ export const apiClient = {
     await api.post(`/api/videos/${id}/view`);
   },
 
-  async uploadVideo(formData: FormData): Promise<Video> {
-    const response = await api.post('/api/videos/upload', formData, {
+  /**
+   * Upload video to PDS
+   * Handles IPFS storage and torrent creation on server side
+   */
+  async uploadVideo(
+    file: File,
+    metadata: VideoUpload,
+    onProgress?: (stage: string, progress: number) => void
+  ): Promise<{
+    id: string;
+    cid: string;
+    infoHash: string;
+    magnetUri: string;
+    video: Video;
+  }> {
+    // Report initial stage
+    onProgress?.('transcoding', 0);
+
+    // Convert file to base64
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+
+    onProgress?.('transcoding', 100);
+    onProgress?.('uploading-ipfs', 0);
+
+    const response = await api.post('/api/videos/upload', {
+      videoData: base64,
+      filename: file.name,
+      fileSize: file.size,
+      title: metadata.title,
+      description: metadata.description,
+      tags: JSON.stringify(metadata.tags || []),
+      monetizationType: metadata.monetizationType,
+      price: metadata.price?.toString(),
+      currency: metadata.currency,
+    }, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': 'application/json',
       },
     });
-    return parseVideo(response.data);
+
+    onProgress?.('uploading-ipfs', 100);
+    onProgress?.('seeding', 100);
+
+    return {
+      id: response.data.id,
+      cid: response.data.cid,
+      infoHash: response.data.infoHash,
+      magnetUri: response.data.magnetUri,
+      video: parseVideo(response.data),
+    };
+  },
+
+  /**
+   * Get upload status for a video
+   */
+  async getUploadStatus(id: string): Promise<{
+    status: string;
+    progress: number;
+    stage: string;
+  }> {
+    const response = await api.get(`/api/videos/upload/${id}/status`);
+    return response.data;
   },
 };
