@@ -90,7 +90,8 @@ function getTorrentClient(): WebTorrent.Instance {
         },
       },
       lsd: true, // Enable Local Service Discovery for LAN peers
-      utpex: true, // Enable UPnP port forwarding
+      // NOTE: 'utpex' isn't a real webtorrent option (typo for uTP / uTP-exchange);
+      // UPnP forwarding is handled by the OS, not the client. Removed.
     });
 
     console.log('[WebTorrentPlayer] Torrent client initialized with DHT support');
@@ -139,7 +140,7 @@ export const WebTorrentPlayer: React.FC<WebTorrentPlayerProps> = ({
     const startStreaming = async () => {
       try {
         // Add torrent with custom tracker URL
-        const torrentOptions: WebTorrent.TorrentOptions = {
+        const torrentOptions = {
           tracker: {
             announce: [
               activeTrackerUrl.current + '/announce',
@@ -150,7 +151,10 @@ export const WebTorrentPlayer: React.FC<WebTorrentPlayerProps> = ({
           },
         };
 
-        client.add(uri, torrentOptions, (torrent) => {
+        // 'tracker' IS a valid runtime option for add() (webtorrent passes it
+        // through to createTorrent) but is missing from @types/webtorrent's
+        // TorrentOptions — hence the cast.
+        client.add(uri, torrentOptions as WebTorrent.TorrentOptions, (torrent) => {
           currentTorrent = torrent;
           const file = torrent.files[fileIndex];
 

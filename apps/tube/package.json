@@ -10,22 +10,25 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
+    "@skippster/agent": "*",
     "@skippster/identity": "*",
-    "@skippster/pds": "*",
     "@skippster/p2p": "*",
     "@skippster/payments": "*",
-    "@skippster/agent": "*",
+    "@skippster/pds": "*",
+    "@videojs/http-streaming": "^3.11.0",
+    "axios": "^1.6.2",
+    "clsx": "^2.0.0",
+    "crypto-browserify": "^3.12.1",
+    "date-fns": "^2.30.0",
+    "lucide-react": "^0.294.0",
+    "path-browserify": "^1.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
+    "stream-browserify": "^3.0.0",
     "video.js": "^8.6.1",
-    "@videojs/http-streaming": "^3.11.0",
     "webtorrent": "^2.1.33",
-    "zustand": "^4.4.7",
-    "axios": "^1.6.2",
-    "lucide-react": "^0.294.0",
-    "clsx": "^2.0.0",
-    "date-fns": "^2.30.0"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

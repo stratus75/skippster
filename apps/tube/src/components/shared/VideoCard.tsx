@@ -4,12 +4,24 @@ import { Clock, Eye, Share2 } from 'lucide-react';
 import type { Video, MonetizationType } from '../../types/video';
 
 /**
- * Video with creator info for display in cards
- * Extends the base Video type with the creator's handle for display
+ * Video with creator info for display in cards.
+ * Uses structural typing (not extending Video) because card display only
+ * needs the render fields, createdAt may arrive as ISO string (API JSON)
+ * or Date, and mock/demo pages don't carry every DB field.
  */
-export interface VideoWithCreator extends Video {
+export interface VideoWithCreator {
+  id: string;
+  did: string;
   handle: string;
+  title: string;
+  duration: number;
+  views: number;
+  createdAt: Date | string;
+  monetizationType?: MonetizationType;
+  description?: string | null;
+  thumbnailCid?: string | null;
   thumbnail?: string;
+  magnetLink?: string;
 }
 
 interface VideoCardProps {
@@ -36,7 +48,7 @@ export function VideoCard({ video, onShareToSocial }: VideoCardProps) {
     return `${views} views`;
   };
 
-  const formatTimeAgo = (date: string) => {
+  const formatTimeAgo = (date: Date | string) => {
     const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
 
     if (seconds < 60) return `${seconds}s ago`;
