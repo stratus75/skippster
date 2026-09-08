@@ -91,6 +91,8 @@ export class SeederService extends EventEmitter {
     if (this.running) return;
 
     // Create WebTorrent client with optimized settings for seeding
+    // NOTE: torrentPort IS a real runtime option of webtorrent 2.x but is
+    // missing from @types/webtorrent 0.109 — hence the cast.
     this.client = new WebTorrent({
       tracker: {
         announce: this.config.trackers,
@@ -98,19 +100,19 @@ export class SeederService extends EventEmitter {
       },
       torrentPort: this.config.port,
       lsd: true, // Local Service Discovery for LAN peers
-    });
+    } as WebTorrent.Options & { torrentPort: number });
 
     this.client.on('error', (err) => {
       console.error('[Seeder] WebTorrent error:', err);
       this.emit('error', err);
     });
 
-    this.client.on('peer', (addr: string, torrent: WebTorrent.Torrent) => {
-      console.log(`[Seeder] New peer for ${torrent.infoHash.slice(0, 8)}: ${addr}`);
-      this.emit('peer', { addr, infoHash: torrent.infoHash });
-    });
+    // NOTE: webtorrent 2.x does NOT emit a client-level 'peer' event
+    // (peer connections are per-torrent). Peer events are wired up per
+    // torrent in seedFile/seedBuffer below via torrent.on('peer').
 
-    this.client.on('seed', (torrent: WebTorrent.Torrent) => {
+    // Client-level 'seed' event is real at runtime (missing from typings).
+    (this.client.on as NodeJS.EventEmitter['on'])('seed', (torrent: WebTorrent.Torrent) => {
       console.log(`[Seeder] Seeding: ${torrent.name} (${torrent.infoHash.slice(0, 8)})`);
       this.emit('seed', { infoHash: torrent.infoHash, name: torrent.name });
     });
@@ -155,10 +157,12 @@ export class SeederService extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
+      // `name` IS accepted by webtorrent 2.x seed() at runtime (verified:
+      // torrent.name reflects it) but is missing from the 0.109 typings.
       this.client!.seed(filePath, {
         name: name || filePath.split('/').pop(),
         announce: this.config.trackers,
-      }, (torrent: WebTorrent.Torrent) => {
+      } as WebTorrent.TorrentOptions & { name?: string }, (torrent: WebTorrent.Torrent) => {
         const seederTorrent: SeederTorrent = {
           infoHash: torrent.infoHash,
           name: torrent.name,
@@ -176,8 +180,8 @@ export class SeederService extends EventEmitter {
         this.torrents.set(torrent.infoHash, seederTorrent);
         this.peers.set(torrent.infoHash, new Map());
 
-        // Track torrent events
-        torrent.on('peer', (peer: any) => {
+        // Track torrent events ('peer' is a real torrent-level event)
+        (torrent.on as NodeJS.EventEmitter['on'])('peer', (_peer: unknown) => {
           this.updatePeerCount(torrent.infoHash);
         });
 
@@ -217,7 +221,7 @@ export class SeederService extends EventEmitter {
       this.client!.seed(buffer, {
         name,
         announce: this.config.trackers,
-      }, (torrent: WebTorrent.Torrent) => {
+      } as WebTorrent.TorrentOptions & { name?: string }, (torrent: WebTorrent.Torrent) => {
         const seederTorrent: SeederTorrent = {
           infoHash: torrent.infoHash,
           name: torrent.name,
@@ -253,7 +257,7 @@ export class SeederService extends EventEmitter {
     this.torrents.delete(infoHash);
     this.peers.delete(infoHash);
 
-    torrent.destroy({ destroy });
+    torrent.destroy({ destroyStore: destroy });
 
     if (removed) {
       this.emit('torrent', { type: 'removed', infoHash });
@@ -288,7 +292,10 @@ export class SeederService extends EventEmitter {
 
     if (torrent && seederTorrent) {
       seederTorrent.leechers = torrent.numPeers;
-      seederTorrent.seeders = torrent.seeds || 0;
+      // webtorrent 2.x has no `seeds` property on Torrent; the wire count is
+      // the de-facto seed count for our LAN seeding use case. `wires` exists
+      // at runtime but is missing from the 0.109 typings.
+      seederTorrent.seeders = (torrent as WebTorrent.Torrent & { wires: unknown[] }).wires.length;
       seederTorrent.lastSeen = new Date();
     }
   }

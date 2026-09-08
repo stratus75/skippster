@@ -9,5 +9,14 @@
     "esModuleInterop": true
   },
   "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules", "src/api/server.ts"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/bun-server.ts",
+    "src/database/bun-connection.ts",
+    "src/models/user-bun.ts",
+    "src/models/video-bun.ts",
+    "src/models/comment-bun.ts",
+    "src/api/auth.test.ts"
+  ]
 }

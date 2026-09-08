@@ -22,7 +22,7 @@ export interface TorrentProgress {
 }
 
 // Simple bencode encoder for torrent files
-function bencode(data: any): Buffer {
+function bencode(data: any): Buffer<ArrayBuffer> {
   if (typeof data === 'string') {
     return Buffer.concat([
       Buffer.from(`${data.length}:`),
@@ -39,7 +39,7 @@ function bencode(data: any): Buffer {
     ]);
   }
   if (Array.isArray(data)) {
-    const parts = [Buffer.from('l')];
+    const parts: Buffer<ArrayBuffer>[] = [Buffer.from('l')];
     for (const item of data) {
       parts.push(bencode(item));
     }
@@ -47,7 +47,7 @@ function bencode(data: any): Buffer {
     return Buffer.concat(parts);
   }
   if (typeof data === 'object' && data !== null) {
-    const parts = [Buffer.from('d')];
+    const parts: Buffer<ArrayBuffer>[] = [Buffer.from('d')];
     const keys = Object.keys(data).sort();
     for (const key of keys) {
       parts.push(bencode(key));

@@ -23,32 +23,36 @@ export const updateUserSchema = z.object({
 // Video schemas
 export const createVideoSchema = z.object({
   id: z.string().min(1, 'Video ID required'),
-  creatorDID: z.string().regex(DID_REGEX, 'Invalid creator DID'),
+  did: z.string().regex(DID_REGEX, 'Invalid creator DID'),
   title: z.string().min(1).max(200, 'Title must be 1-200 characters'),
   description: z.string().max(5000).optional(),
-  thumbnailUrl: z.string().url().optional(),
+  thumbnailCid: z.string().max(200).optional(),
   magnetLink: z.string().min(1, 'Magnet link required'),
-  duration: z.number().int().positive().optional(),
-  visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
-  monetizationType: z.enum(['free', 'paid', 'subscription']).default('free'),
+  duration: z.number().int().nonnegative().default(0),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  monetizationType: z.enum(['free', 'donations', 'payperview', 'subscription']).default('free'),
   price: z.number().positive().optional(),
+  currency: z.string().max(8).optional(),
 });
 
 export const updateVideoSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).optional(),
-  thumbnailUrl: z.string().url().optional(),
-  visibility: z.enum(['public', 'unlisted', 'private']).optional(),
-  monetizationType: z.enum(['free', 'paid', 'subscription']).optional(),
+  thumbnailCid: z.string().max(200).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  monetizationType: z.enum(['free', 'donations', 'payperview', 'subscription']).optional(),
   price: z.number().positive().optional(),
+  currency: z.string().max(8).optional(),
 });
 
 // Post schemas
 export const createPostSchema = z.object({
   id: z.string().min(1, 'Post ID required'),
-  authorDID: z.string().regex(DID_REGEX, 'Invalid author DID'),
+  did: z.string().regex(DID_REGEX, 'Invalid author DID'),
   content: z.string().max(5000, 'Content must be under 5000 characters'),
-  visibility: z.enum(['public', 'friends', 'private']).default('public'),
+  mediaCids: z.array(z.string().max(200)).max(10).optional(),
+  videoId: z.string().max(100).optional(),
+  privacy: z.enum(['public', 'friends', 'group', 'specific']).default('public'),
 });
 
 export const updatePostSchema = z.object({
@@ -59,7 +63,7 @@ export const updatePostSchema = z.object({
 // Comment schemas
 export const createCommentSchema = z.object({
   id: z.string().min(1, 'Comment ID required'),
-  authorDID: z.string().regex(DID_REGEX, 'Invalid author DID'),
+  did: z.string().regex(DID_REGEX, 'Invalid author DID'),
   targetType: z.enum(['video', 'post']),
   targetId: z.string().min(1, 'Target ID required'),
   content: z.string().max(2000, 'Comment must be under 2000 characters'),
@@ -68,10 +72,11 @@ export const createCommentSchema = z.object({
 
 // Reaction schemas
 export const createReactionSchema = z.object({
-  authorDID: z.string().regex(DID_REGEX, 'Invalid author DID'),
+  id: z.string().min(1, 'Reaction ID required'),
+  did: z.string().regex(DID_REGEX, 'Invalid author DID'),
   targetType: z.enum(['video', 'post']),
   targetId: z.string().min(1, 'Target ID required'),
-  reactionType: z.enum(['like', 'love', 'laugh', 'wow', 'sad', 'angry']),
+  emoji: z.string().max(16).optional(),
 });
 
 // Subscription schemas
@@ -93,11 +98,12 @@ export const friendActionSchema = z.object({
 
 // Notification schemas
 export const createNotificationSchema = z.object({
-  recipientDID: z.string().regex(DID_REGEX, 'Invalid recipient DID'),
-  type: z.enum(['friend_request', 'friend_accepted', 'comment', 'reaction', 'mention', 'system']),
+  id: z.string().optional(),
+  toDid: z.string().regex(DID_REGEX, 'Invalid recipient DID'),
+  type: z.enum(['friend_request', 'friend_accepted', 'post_like', 'comment', 'mention', 'video_comment', 'video_like', 'subscription', 'system']),
   title: z.string().min(1).max(200),
-  content: z.string().max(1000).optional(),
-  data: z.record(z.unknown()).optional(),
+  message: z.string().min(1).max(1000),
+  actionUrl: z.string().max(500).optional(),
 });
 
 // Query parameter schemas
@@ -127,7 +133,7 @@ export const commentQuerySchema = paginationSchema.extend({
 });
 
 // Validation helper
-export function validate<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; error: string } {
+export function validate<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, data: unknown): { success: true; data: T } | { success: false; error: string } {
   const result = schema.safeParse(data);
   if (result.success) {
     return { success: true, data: result.data };

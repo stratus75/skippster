@@ -42,7 +42,7 @@ export interface PeersResponse {
 export class DHTTracker {
   private router: Router;
   private config: Required<TrackerConfig>;
-  private localPeers: Map<string, Set<string>> = new Map(); // infoHash -> peerIds
+  private localPeers: Map<string, Map<string, { info: { ip: string; port: number; lastSeen: number; event?: string }; timeout: NodeJS.Timeout }>> = new Map(); // infoHash -> peerKey -> peer data
   private dhtNodes: Set<string> = new Set(); // Known DHT bootstrap nodes
   private running: boolean = false;
   private server: any = null;
@@ -206,7 +206,7 @@ export class DHTTracker {
     const peerInfo = { ip, port, lastSeen: Date.now(), event };
 
     if (!this.localPeers.has(infoHash)) {
-      this.localPeers.set(infoHash, new Set());
+      this.localPeers.set(infoHash, new Map());
     }
 
     // Store peer info with timeout
@@ -214,7 +214,7 @@ export class DHTTracker {
       this.removePeer(infoHash, peerId);
     }, 2700 * 1000); // 45 minutes timeout
 
-    (this.localPeers.get(infoHash) as any).set(key, { info: peerInfo, timeout: peerTimeout });
+    this.localPeers.get(infoHash)!.set(key, { info: peerInfo, timeout: peerTimeout });
 
     // Handle stop event
     if (event === 'stopped') {

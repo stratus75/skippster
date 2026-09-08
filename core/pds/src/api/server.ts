@@ -16,6 +16,9 @@ import {
   SubscriptionRepository,
   FriendRepository,
   NotificationRepository,
+  Video,
+  Post,
+  Comment,
 } from '../models';
 import { authMiddleware, setUserRepository } from './middleware';
 import { validate, createUserSchema, createVideoSchema, updateVideoSchema, createPostSchema, createCommentSchema, createReactionSchema, createSubscriptionSchema, friendRequestSchema, friendActionSchema, createNotificationSchema } from './validation';
@@ -30,7 +33,7 @@ export interface ServerConfig {
 export class PDSServer {
   private app: express.Application;
   private db: DatabaseConnection;
-  private config: ServerConfig;
+  private config: Required<ServerConfig>;
 
   constructor(db: DatabaseConnection, config: ServerConfig = {}) {
     this.db = db;
@@ -111,7 +114,7 @@ export class PDSServer {
     this.app.get('/api/videos', (req, res) => {
       const { did, trending, recommended, search, limit = '20', offset = '0' } = req.query;
 
-      let videos;
+      let videos: Video[] = [];
       if (trending === 'true') {
         videos = videoRepo.findTrending(Number(limit), Number(offset));
       } else if (recommended && typeof recommended === 'string') {
@@ -120,8 +123,6 @@ export class PDSServer {
         videos = videoRepo.search(search, Number(limit));
       } else if (did && typeof did === 'string') {
         videos = videoRepo.findByDID(did, Number(limit), Number(offset));
-      } else {
-        videos = [];
       }
 
       res.json({ videos, limit: Number(limit), offset: Number(offset) });
@@ -173,15 +174,13 @@ export class PDSServer {
     this.app.get('/api/posts', (req, res) => {
       const { did, feed, public: isPublic, limit = '20', offset = '0' } = req.query;
 
-      let posts;
+      let posts: Post[] = [];
       if (feed && typeof feed === 'string') {
         posts = postRepo.findFeed(feed, Number(limit), Number(offset));
       } else if (isPublic === 'true') {
         posts = postRepo.findPublic(Number(limit), Number(offset));
       } else if (did && typeof did === 'string') {
         posts = postRepo.findByDID(did, Number(limit), Number(offset));
-      } else {
-        posts = [];
       }
 
       res.json({ posts, limit: Number(limit), offset: Number(offset) });
@@ -212,15 +211,13 @@ export class PDSServer {
     this.app.get('/api/comments', (req, res) => {
       const { targetType, targetId, parentId, did, limit = '50' } = req.query;
 
-      let comments;
+      let comments: Comment[] = [];
       if (parentId && typeof parentId === 'string') {
         comments = commentRepo.findByParent(parentId, Number(limit));
       } else if (targetType && targetId && typeof targetType === 'string' && typeof targetId === 'string') {
         comments = commentRepo.findByTarget(targetType as 'video' | 'post', targetId, Number(limit));
       } else if (did && typeof did === 'string') {
         comments = commentRepo.findByDID(did, Number(limit));
-      } else {
-        comments = [];
       }
 
       res.json({ comments, limit: Number(limit) });
