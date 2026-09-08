@@ -51,6 +51,12 @@ export class UserRepository {
     return row ? this.rowToUser(row) : null;
   }
 
+  findByPublicKey(publicKey: string): User | null {
+    const stmt = this.db.getDb().prepare('SELECT * FROM users WHERE public_key = ?');
+    const row = stmt.get(publicKey) as any;
+    return row ? this.rowToUser(row) : null;
+  }
+
   update(did: string, updates: Partial<Omit<User, 'did' | 'createdAt'>>): User | null {
     const existing = this.findByDID(did);
     if (!existing) return null;

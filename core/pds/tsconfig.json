@@ -9,5 +9,5 @@
     "esModuleInterop": true
   },
   "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules", "src/api/server.ts", "src/api/middleware.ts"]
+  "exclude": ["dist", "node_modules", "src/api/server.ts"]
 }

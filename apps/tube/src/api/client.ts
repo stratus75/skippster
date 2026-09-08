@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { Video, VideoUpload } from '../types';
+import { loadIdentity, authHeaders } from './identity';
 
 const PDS_URL = typeof process !== 'undefined' 
   ? (process.env.VITE_PDS_URL || 'http://localhost:4000')
@@ -10,6 +11,17 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Attach a fresh Ed25519 DID token to every request (if an identity exists).
+// Tokens are single-use (server replay cache), so each request gets its own.
+api.interceptors.request.use((config) => {
+  const id = loadIdentity();
+  const headers = authHeaders(id);
+  if (headers.Authorization) {
+    config.headers.set('Authorization', headers.Authorization);
+  }
+  return config;
 });
 
 function parseVideo(data: Record<string, unknown>): Video {

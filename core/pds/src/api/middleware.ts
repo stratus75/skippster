@@ -1,6 +1,6 @@
 /**
  * PDS API Middleware
- * Authentication, rate limiting, logging
+ * Authentication (Ed25519 DID tokens), rate limiting, logging
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -32,108 +32,93 @@ export function setUserRepository(
   userRepo = repo;
 }
 
-/**
- * DID-based authentication middleware
- * Verifies the signature in the Authorization header
- */
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    res.status(401).json({ error: 'Authorization header required' });
-    return;
-  }
-
+async function authenticate(
+  authHeader: string | undefined
+): Promise<{ did: string; handle: string } | { error: string; status: number } | null> {
   const token = parseAuthToken(authHeader);
 
   if (!token) {
-    res.status(401).json({ error: 'Invalid authorization format' });
-    return;
+    return { error: 'Invalid authorization format', status: 401 };
   }
 
   // Validate DID format
   if (!token.did.startsWith('did:plc:')) {
-    res.status(401).json({ error: 'Invalid DID format' });
-    return;
+    return { error: 'Invalid DID format', status: 401 };
   }
 
   // Check timestamp to prevent replay attacks
   if (!isTokenTimestampValid(token.timestamp)) {
-    res.status(401).json({ error: 'Token expired' });
-    return;
+    return { error: 'Token expired', status: 401 };
   }
 
-  // Look up user to get public key
+  // Look up user to get public key (server-side source of truth)
   if (!userRepo) {
     console.error('User repository not configured for authentication');
-    res.status(500).json({ error: 'Authentication not configured' });
-    return;
+    return { error: 'Authentication not configured', status: 500 };
   }
 
   const user = userRepo.findByDID(token.did);
   if (!user) {
-    res.status(401).json({ error: 'User not found' });
-    return;
+    return { error: 'User not found', status: 401 };
   }
 
-  // Verify signature asynchronously
-  verifyAuthToken(token, user.publicKey)
-    .then((isValid) => {
-      if (!isValid) {
-        res.status(401).json({ error: 'Invalid signature' });
-        return;
-      }
+  // Verify REAL Ed25519 signature + anti-replay
+  const isValid = await verifyAuthToken(token, user.publicKey);
+  if (!isValid) {
+    return { error: 'Invalid signature', status: 401 };
+  }
 
-      // Attach authenticated user to request
-      req.user = {
-        did: user.did,
-        handle: user.handle,
-      };
-      next();
-    })
-    .catch((err) => {
-      console.error('Authentication error:', err);
-      res.status(401).json({ error: 'Authentication failed' });
-    });
+  return { did: user.did, handle: user.handle };
+}
+
+/**
+ * DID-based authentication middleware
+ * Verifies the Ed25519 signature in the Authorization header
+ */
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      res.status(401).json({ error: 'Authorization header required' });
+      return;
+    }
+
+    const result = await authenticate(authHeader);
+
+    if (!result || 'error' in result) {
+      res.status(result?.status ?? 401).json({ error: result?.error ?? 'Authentication failed' });
+      return;
+    }
+
+    req.user = result;
+    next();
+  } catch (err) {
+    console.error('Authentication error:', err);
+    res.status(401).json({ error: 'Authentication failed' });
+  }
 }
 
 /**
  * Optional authentication middleware
  * Extracts user info if present, but doesn't require authentication
  */
-export function optionalAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
+export async function optionalAuthMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const authHeader = req.headers.authorization;
 
-  if (!authHeader) {
+    if (!authHeader) {
+      next();
+      return;
+    }
+
+    const result = await authenticate(authHeader);
+
+    if (result && !('error' in result)) {
+      req.user = result;
+    }
     next();
-    return;
-  }
-
-  const token = parseAuthToken(authHeader);
-
-  if (!token || !token.did.startsWith('did:plc:')) {
-    next();
-    return;
-  }
-
-  if (!userRepo || !isTokenTimestampValid(token.timestamp)) {
-    next();
-    return;
-  }
-
-  const user = userRepo.findByDID(token.did);
-  if (user) {
-    verifyAuthToken(token, user.publicKey)
-      .then((isValid) => {
-        if (isValid) {
-          req.user = { did: user.did, handle: user.handle };
-        }
-        next();
-      })
-      .catch(() => {
-        next();
-      });
-  } else {
+  } catch {
     next();
   }
 }

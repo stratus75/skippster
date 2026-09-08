@@ -5,6 +5,8 @@ import { DatabaseConnection } from './database/connection.js';
 import { UserRepository } from './models/user.js';
 import { VideoRepository } from './models/video.js';
 import { CommentRepository } from './models/comment.js';
+import { authMiddleware, optionalAuthMiddleware, setUserRepository } from './api/middleware.js';
+import { createIdentityRouter } from './api/identity.js';
 
 const app = express();
 const db = DatabaseConnection.createInstance({ path: './skippster.db' });
@@ -17,16 +19,24 @@ const userRepo = new UserRepository(db);
 const videoRepo = new VideoRepository(db);
 const commentRepo = new CommentRepository(db);
 
+// Auth wiring
+setUserRepository(userRepo);
+app.use('/api/identity', createIdentityRouter(db));
+
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
 // ===== USERS API =====
+// Public listing returns SAFE profile fields only — never publicKey.
 app.get('/api/users', (_req: Request, res: Response) => {
   try {
-    const stmt = db.getDb().prepare('SELECT * FROM users LIMIT 50');
-    const users = stmt.all();
+    const users = userRepo.findAll(50).map((u) => ({
+      did: u.did,
+      handle: u.handle,
+      createdAt: u.createdAt,
+    }));
     res.json({ users });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -37,22 +47,30 @@ app.get('/api/users/:did', (req: Request, res: Response) => {
   try {
     const user = userRepo.findByDID(req.params.did);
     if (!user) return res.status(404).json({ error: 'Not found' });
-    res.json(user);
+    // Safe profile only — publicKey must never be exposed to clients.
+    res.json({ did: user.did, handle: user.handle, createdAt: user.createdAt });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
 });
 
-app.post('/api/users', (req: Request, res: Response) => {
-  try {
-    const user = userRepo.create(req.body);
-    res.status(201).json(user);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+// Registration now goes through the signed identity flow (see /api/identity).
+// Direct unsigned user creation is no longer allowed.
+app.post('/api/users', (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: 'Direct user creation removed. Use POST /api/identity/register with a signed ownership proof.',
+  });
 });
 
-// ===== VIDEOS API =====
+// ===== VIDEOS API (writes authenticated + ownership-checked) =====
+const videoWriteGuard = [optionalAuthMiddleware, (req: Request, res: Response, next: any) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required (Ed25519 DID token)' });
+    return;
+  }
+  next();
+}];
+
 app.get('/api/videos', (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
@@ -106,17 +124,25 @@ app.get('/api/videos/creator/:did', (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/videos', (req: Request, res: Response) => {
+// Create: the video is attributed to the AUTHENTICATED did — the client-supplied
+// did field is ignored (can't upload as someone else).
+app.post('/api/videos', ...videoWriteGuard, (req: Request, res: Response) => {
   try {
-    const video = videoRepo.create(req.body);
+    const video = videoRepo.create({ ...req.body, did: req.user!.did });
     res.status(201).json(video);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
 });
 
-app.patch('/api/videos/:id', (req: Request, res: Response) => {
+// Update/Delete: only the owner.
+app.patch('/api/videos/:id', ...videoWriteGuard, (req: Request, res: Response) => {
   try {
+    const existing = videoRepo.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (existing.did !== req.user!.did) {
+      return res.status(403).json({ error: 'Not your video' });
+    }
     const video = videoRepo.update(req.params.id, req.body);
     if (!video) return res.status(404).json({ error: 'Not found' });
     res.json(video);
@@ -125,8 +151,13 @@ app.patch('/api/videos/:id', (req: Request, res: Response) => {
   }
 });
 
-app.delete('/api/videos/:id', (req: Request, res: Response) => {
+app.delete('/api/videos/:id', ...videoWriteGuard, (req: Request, res: Response) => {
   try {
+    const existing = videoRepo.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (existing.did !== req.user!.did) {
+      return res.status(403).json({ error: 'Not your video' });
+    }
     const deleted = videoRepo.delete(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Not found' });
     res.json({ deleted: true });
@@ -178,8 +209,14 @@ function getNetworkService(): Promise<any> {
 }
 
 // Upload endpoint - handles video file as base64, stores to disk, creates torrent
-app.post('/api/videos/upload', async (req: Request, res: Response) => {
+// REQUIRES a valid Ed25519 DID token; the video is attributed to the
+// authenticated did (body.did is ignored — can't upload as someone else).
+app.post('/api/videos/upload', optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required (Ed25519 DID token)' });
+      return;
+    }
     const body = req.body;
     
     if (!body.videoData) {
@@ -239,7 +276,7 @@ app.post('/api/videos/upload', async (req: Request, res: Response) => {
     // Create video record
     const videoData = {
       id,
-      did: body.did || 'anonymous',
+      did: req.user.did, // authenticated owner — body.did is ignored
       title: title || originalName,
       description: description || null,
       thumbnailCid: null,
@@ -250,7 +287,7 @@ app.post('/api/videos/upload', async (req: Request, res: Response) => {
       monetizationType: monetizationType || 'free',
       price: price ? parseFloat(price) : null,
       currency: currency || null,
-    };
+    } as any;
 
     const video = videoRepo.create(videoData);
 
@@ -259,11 +296,10 @@ app.post('/api/videos/upload', async (req: Request, res: Response) => {
     console.log(`[Upload] Magnet: ${magnetUri.slice(0, 80)}...`);
 
     res.status(201).json({
-      id,
+      ...video,
       cid,
       infoHash,
       magnetUri,
-      ...video,
     });
   } catch (error: any) {
     console.error('[Upload] Error:', error);
@@ -282,7 +318,7 @@ app.get('/api/videos/upload/:id/status', (req: Request, res: Response) => {
   });
 });
 
-// ===== COMMENTS API =====
+// ===== COMMENTS API (write authenticated; did from token) =====
 app.get('/api/videos/:id/comments', (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
@@ -293,10 +329,15 @@ app.get('/api/videos/:id/comments', (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/videos/:id/comments', (req: Request, res: Response) => {
+app.post('/api/videos/:id/comments', optionalAuthMiddleware, (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required (Ed25519 DID token)' });
+      return;
+    }
     const commentData = {
       ...req.body,
+      did: req.user.did, // authenticated author — body.did is ignored
       targetType: 'video' as const,
       targetId: req.params.id
     };
