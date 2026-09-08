@@ -148,7 +148,7 @@ app.post('/api/videos/:id/view', (req: Request, res: Response) => {
 // Note: Uses base64-encoded file data for simplicity
 // In production, install multer or use busboy for multipart handling
 
-import { join } from 'path';
+import { join, basename } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { createHash, randomBytes } from 'crypto';
 
@@ -158,13 +158,23 @@ async function ensureDir(dir: string) {
   } catch {}
 }
 
-// Simple torrent info hash generator
-function generateInfoHash(data: Buffer, name: string): string {
-  const hash = createHash('sha1');
-  hash.update(data.slice(0, Math.min(data.length, 1024 * 1024)));
-  hash.update(name);
-  hash.update(Date.now().toString());
-  return hash.digest('hex');
+// Real content hash (CID-style) for the uploaded bytes
+function contentHash(data: Buffer): string {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+// Lazy-load the real NetworkService (ESM) once. It seeds the file through a
+// real bittorrent-tracker and returns a REAL infoHash + magnet URI, so peers
+// can actually fetch the video. Network mode is controlled by
+// SKIPSTER_NETWORK_MODE (private|public, default private).
+let networkServicePromise: Promise<any> | null = null;
+function getNetworkService(): Promise<any> {
+  if (!networkServicePromise) {
+    networkServicePromise = import('../network-service.mjs').then((m) =>
+      m.getNetworkService({ uploadDir: join(process.cwd(), 'uploads') })
+    );
+  }
+  return networkServicePromise;
 }
 
 // Upload endpoint - handles video file as base64, stores to disk, creates torrent
@@ -196,24 +206,25 @@ app.post('/api/videos/upload', async (req: Request, res: Response) => {
     // Generate video ID
     const id = `vid_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
 
-    // Generate IPFS-style CID (stub)
-    const cid = `bafk${generateInfoHash(videoBuffer, originalName)}`;
-
-    // Generate torrent info hash and magnet URI
-    const infoHash = generateInfoHash(videoBuffer, originalName);
-    const trackers = [
-      'wss://tracker.openwebtorrent.com',
-      'wss://tracker.btorrent.xyz',
-      'udp://tracker.opentrackr.org:1337/announce',
-    ];
-    const magnetUri = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(originalName)}` +
-      trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+    // Real content hash (CID-style) for the uploaded bytes
+    const cid = contentHash(videoBuffer);
 
     // Save file to uploads directory
     const uploadsDir = join(process.cwd(), 'uploads');
     await ensureDir(uploadsDir);
     const filePath = join(uploadsDir, `${id}-${originalName}`);
     await writeFile(filePath, videoBuffer);
+
+    // Seed the file through the REAL network service -> real infoHash + magnet
+    // IMPORTANT: seed with the ACTUAL on-disk basename so WebTorrent's file
+    // store can locate the file (it resolves the torrent's internal path by
+    // name). Seeding with a different name than the file's basename makes the
+    // store unable to find the file -> no pieces available -> piece requests
+    // get rejected and peers can't download.
+    const net = await getNetworkService();
+    const seeded = await net.seedFile(filePath, basename(filePath));
+    const infoHash = seeded.infoHash;
+    const magnetUri = seeded.magnetURI;
 
     // Parse tags
     let parsedTags: string[] = [];
@@ -228,7 +239,7 @@ app.post('/api/videos/upload', async (req: Request, res: Response) => {
     // Create video record
     const videoData = {
       id,
-      did: 'anonymous',
+      did: body.did || 'anonymous',
       title: title || originalName,
       description: description || null,
       thumbnailCid: null,

@@ -25,7 +25,6 @@ export type {
 
 // Lightning
 export { LightningAddressManager } from './lightning/address';
-export type from './lightning/address';
 
 // Solana
 export { SolanaWalletManager } from './solana/wallet';

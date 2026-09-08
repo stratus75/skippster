@@ -71,6 +71,52 @@ export interface VideoMetadata {
   currency?: string;
 }
 
+/**
+ * Video type for API responses and database models
+ * This is the canonical Video type used across the platform
+ */
+export type VideoMonetizationType = 'free' | 'donations' | 'payperview' | 'subscription';
+
+export interface Video {
+  id: string;
+  did: string;
+  title: string;
+  description: string | null;
+  thumbnailCid: string | null;
+  magnetLink: string;
+  duration: number;
+  views: number;
+  tags: string[] | null;
+  monetizationType: VideoMonetizationType;
+  price: number | null;
+  currency: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Video with creator handle (for display purposes)
+ * Extends Video with optional handle field for UI rendering
+ */
+export interface VideoWithHandle extends Video {
+  handle?: string;
+}
+
+/**
+ * Video for card display (simplified view)
+ */
+export interface VideoCardData {
+  id: string;
+  did: string;
+  handle?: string;
+  title: string;
+  thumbnail?: string;
+  duration: number;
+  views: number;
+  createdAt: Date | string;
+  monetizationType: VideoMonetizationType;
+}
+
 export interface Post {
   id: string;
   authorDID: string;

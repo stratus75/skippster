@@ -1,6 +1,10 @@
 import React, { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, Store, MessageCircle, MoreHorizontal } from 'lucide-react';
+import { Home, Users, Store, MessageCircle } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
+
+// Mock user DID - in real app, this would come from auth
+const MOCK_USER_DID = 'did:plc:test-user-001';
 
 interface LayoutProps {
   children: ReactNode;
@@ -32,23 +36,44 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Search Bar */}
         <div className="hidden md:flex flex-1 max-w-md mx-4">
-          <input type="text" placeholder="Search Skippster Social" className="w-full" />
+          <input
+            type="text"
+            placeholder="Search Skippster Social"
+            className="w-full bg-[#3a3b3c] rounded-full px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-social-500"
+          />
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          <Link to="/" className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors">
+          <Link
+            to="/"
+            className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors"
+          >
             <Home className="w-5 h-5" />
           </Link>
-          <Link to="/marketplace" className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors">
+          <Link
+            to="/marketplace"
+            className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors"
+          >
             <Store className="w-5 h-5" />
           </Link>
-          <Link to="/groups" className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors">
+          <Link
+            to="/groups"
+            className="w-10 h-10 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center transition-colors"
+          >
             <Users className="w-5 h-5" />
           </Link>
-          <div className="w-10 h-10 bg-social-500 rounded-full flex items-center justify-center">
+
+          {/* Notification Bell */}
+          <NotificationBell did={MOCK_USER_DID} />
+
+          {/* User Avatar */}
+          <Link
+            to="/profile"
+            className="w-10 h-10 bg-social-500 rounded-full flex items-center justify-center"
+          >
             <span className="text-sm font-medium">U</span>
-          </div>
+          </Link>
         </div>
       </nav>
 
@@ -106,7 +131,10 @@ export function Layout({ children }: LayoutProps) {
             <h3 className="text-xl font-bold mb-4">Contacts</h3>
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-3 hover:bg-[#3a3b3c] rounded-lg p-2 cursor-pointer">
+                <div
+                  key={i}
+                  className="flex items-center gap-3 hover:bg-[#3a3b3c] rounded-lg p-2 cursor-pointer"
+                >
                   <div className="w-9 h-9 bg-[#3a3b3c] rounded-full" />
                   <span>User {i}</span>
                 </div>

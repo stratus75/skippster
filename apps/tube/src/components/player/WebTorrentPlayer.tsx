@@ -54,8 +54,12 @@ interface WebTorrentPlayerProps {
 // Singleton client instance
 let clientInstance: WebTorrent.Instance | null = null;
 
-// Default tracker URL (can be configured)
-let defaultTrackerUrl = 'http://localhost:4001';
+// Default tracker URL (can be configured). For LAN testing set VITE_TRACKER_URL
+// to this machine's LAN IP (e.g. http://192.168.0.229:4001) so browsers on
+// other machines can reach the tracker. Defaults to localhost (same-machine).
+let defaultTrackerUrl = (typeof process !== 'undefined' && process.env.VITE_TRACKER_URL)
+  ? process.env.VITE_TRACKER_URL
+  : 'http://localhost:4001';
 
 export function setDefaultTrackerUrl(url: string): void {
   defaultTrackerUrl = url;
